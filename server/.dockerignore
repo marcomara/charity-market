@@ -1,0 +1,39 @@
+# Maven build output
+target/
+dist/
+
+# Local databases and runtime data
+data/
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+
+# IDE files
+.idea/
+.vscode/
+*.iml
+
+# Version control
+.git/
+.gitignore
+
+# Environment and secret files
+.env
+.env.*
+*.secret
+*.secrets
+
+# Operating-system files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Keep these source-build files available:
+# .mvn/
+# mvnw
+# pom.xml
+# src/
+# Dockerfile

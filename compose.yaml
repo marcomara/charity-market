@@ -1,0 +1,197 @@
+name: charity-market
+
+# =========================================================
+# Shared server configuration
+# =========================================================
+
+x-server-common: &server-common
+  restart: unless-stopped
+
+  ports:
+    - "${SERVER_PORT:-8080}:8080"
+
+  environment:
+    QUARKUS_HTTP_HOST: "0.0.0.0"
+    QUARKUS_HTTP_PORT: "8080"
+
+    # Optional JVM configuration.
+    JAVA_TOOL_OPTIONS: "${JAVA_TOOL_OPTIONS:--Xms128m -Xmx512m}"
+
+# =========================================================
+# Services
+# =========================================================
+
+services:
+
+  # -------------------------------------------------------
+  # Mode 1: SQLite
+  #
+  # Start with:
+  # docker compose --profile sqlite up -d --build
+  # -------------------------------------------------------
+
+  server-sqlite:
+    <<: *server-common
+
+    profiles:
+      - sqlite
+
+    image: charity-market-server:sqlite
+
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+      args:
+        DB_PROFILE: sqlite
+
+    environment:
+      QUARKUS_HTTP_HOST: "0.0.0.0"
+      QUARKUS_HTTP_PORT: "8080"
+      QUARKUS_PROFILE: "sqlite"
+
+      JAVA_TOOL_OPTIONS: "${JAVA_TOOL_OPTIONS:--Xms128m -Xmx512m}"
+
+      QUARKUS_DATASOURCE_JDBC_URL: >-
+        jdbc:sqlite:/data/charity-market.db
+
+      QUARKUS_DATASOURCE_JDBC_MIN_SIZE: "1"
+      QUARKUS_DATASOURCE_JDBC_MAX_SIZE: "1"
+
+      QUARKUS_HIBERNATE_ORM_SCHEMA_MANAGEMENT_STRATEGY: "update"
+
+    volumes:
+      - sqlite-data:/data
+
+
+  # -------------------------------------------------------
+  # Mode 2: PostgreSQL created and managed by Compose
+  #
+  # Start with:
+  # docker compose --env-file .env.managed
+  #   --profile managed-postgres up -d --build
+  # -------------------------------------------------------
+
+  database:
+    profiles:
+      - managed-postgres
+
+    image: postgres:17-alpine
+
+    restart: unless-stopped
+
+    environment:
+      POSTGRES_DB: "${POSTGRES_DB:-charitymarket}"
+      POSTGRES_USER: "${POSTGRES_USER:-charitymarket}"
+
+      # Set this in .env.managed.
+      # The fallback prevents inactive profiles from breaking
+      # Compose interpolation.
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:-change-me-before-use}"
+
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+
+
+  server-managed-postgres:
+    <<: *server-common
+
+    profiles:
+      - managed-postgres
+
+    image: charity-market-server:postgres
+
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+      args:
+        DB_PROFILE: postgres
+
+    depends_on:
+      database:
+        condition: service_healthy
+
+    environment:
+      QUARKUS_HTTP_HOST: "0.0.0.0"
+      QUARKUS_HTTP_PORT: "8080"
+      QUARKUS_PROFILE: "postgres"
+
+      JAVA_TOOL_OPTIONS: "${JAVA_TOOL_OPTIONS:--Xms128m -Xmx512m}"
+
+      QUARKUS_DATASOURCE_JDBC_URL: >-
+        jdbc:postgresql://database:5432/${POSTGRES_DB:-charitymarket}
+
+      QUARKUS_DATASOURCE_USERNAME: >-
+        ${POSTGRES_USER:-charitymarket}
+
+      QUARKUS_DATASOURCE_PASSWORD: >-
+        ${POSTGRES_PASSWORD:-change-me-before-use}
+
+      QUARKUS_DATASOURCE_JDBC_MIN_SIZE: "2"
+      QUARKUS_DATASOURCE_JDBC_MAX_SIZE: "${POSTGRES_POOL_SIZE:-20}"
+
+      QUARKUS_HIBERNATE_ORM_SCHEMA_MANAGEMENT_STRATEGY: "update"
+
+
+  # -------------------------------------------------------
+  # Mode 3: Existing external PostgreSQL database
+  #
+  # Start with:
+  # docker compose --env-file .env.external
+  #   --profile external-postgres up -d --build
+  # -------------------------------------------------------
+
+  server-external-postgres:
+    <<: *server-common
+
+    profiles:
+      - external-postgres
+
+    image: charity-market-server:postgres
+
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+      args:
+        DB_PROFILE: postgres
+
+    environment:
+      QUARKUS_HTTP_HOST: "0.0.0.0"
+      QUARKUS_HTTP_PORT: "8080"
+      QUARKUS_PROFILE: "postgres"
+
+      JAVA_TOOL_OPTIONS: "${JAVA_TOOL_OPTIONS:--Xms128m -Xmx512m}"
+
+      # Empty defaults prevent inactive profiles from causing
+      # Compose interpolation errors.
+      QUARKUS_DATASOURCE_JDBC_URL: "${EXTERNAL_DB_URL:-}"
+      QUARKUS_DATASOURCE_USERNAME: "${EXTERNAL_DB_USER:-}"
+      QUARKUS_DATASOURCE_PASSWORD: "${EXTERNAL_DB_PASSWORD:-}"
+
+      QUARKUS_DATASOURCE_JDBC_MIN_SIZE: "2"
+      QUARKUS_DATASOURCE_JDBC_MAX_SIZE: "${POSTGRES_POOL_SIZE:-20}"
+
+      QUARKUS_HIBERNATE_ORM_SCHEMA_MANAGEMENT_STRATEGY: "update"
+
+
+# =========================================================
+# Persistent volumes
+# =========================================================
+
+volumes:
+  sqlite-data:
+    name: charity-market-sqlite-data
+
+  postgres-data:
+    name: charity-market-postgres-data
+

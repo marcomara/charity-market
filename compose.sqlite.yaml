@@ -1,0 +1,51 @@
+name: charity-market-sqlite
+
+services:
+  server:
+    image: mmarannino/charity-market-server:sqlite-1.0.0
+
+    restart: unless-stopped
+
+    ports:
+      - "${SERVER_PORT:-8088}:8088"
+
+    environment:
+      QUARKUS_PROFILE: "sqlite"
+
+      QUARKUS_HTTP_HOST: "0.0.0.0"
+      QUARKUS_HTTP_PORT: "8088"
+
+      JAVA_TOOL_OPTIONS: "${JAVA_TOOL_OPTIONS:--Xms128m -Xmx512m}"
+
+      QUARKUS_DATASOURCE_JDBC_URL: >-
+        jdbc:sqlite:/data/charity-market.db
+
+      QUARKUS_DATASOURCE_JDBC_MIN_SIZE: "1"
+      QUARKUS_DATASOURCE_JDBC_MAX_SIZE: "1"
+
+      QUARKUS_HIBERNATE_ORM_SCHEMA_MANAGEMENT_STRATEGY: "update"
+
+      CHARITY_BOOTSTRAP_ADMIN_USERNAME: "${ADMIN_USERNAME:-admin}"
+      CHARITY_BOOTSTRAP_ADMIN_PASSWORD: "${ADMIN_PASSWORD:?Set ADMIN_PASSWORD in .env.sqlite}"
+      CHARITY_BOOTSTRAP_ADMIN_MUST_CHANGE_PASSWORD: "${ADMIN_MUST_CHANGE_PASSWORD:-true}"
+
+      SMALLRYE_JWT_SIGN_KEY_LOCATION: "/run/secrets/jwt_private_key"
+      MP_JWT_VERIFY_PUBLICKEY_LOCATION: "/run/secrets/jwt_public_key"
+
+    volumes:
+      - sqlite-data:/data
+
+    secrets:
+      - jwt_private_key
+      - jwt_public_key
+
+volumes:
+  sqlite-data:
+    name: charity-market-sqlite-data
+
+secrets:
+  jwt_private_key:
+    file: ./deploy/secrets/privateKey.pem
+
+  jwt_public_key:
+    file: ./deploy/secrets/publicKey.pem
